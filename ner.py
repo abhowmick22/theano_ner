@@ -145,7 +145,7 @@ s = {'fold':5, # 5 folds 0,1,2,3,4
      'nhidden':100, # number of hidden units
      'seed':345,
      'emb_dimension':100, # dimension of word embedding
-     'nepochs':1}
+     'nepochs':50}
 
 folder = os.path.basename(__file__).split('.')[0]
 if not os.path.exists(folder): os.mkdir(folder)
