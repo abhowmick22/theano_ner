@@ -28,10 +28,16 @@ class CoNLL2k3Loader(Loader):
     def __init__(self, train_file, test_file, output_file):
         if train_file != 'dummy':
             self.train_file = open(train_file, 'r')
+        else:
+            self.train_file = open('dummy', 'w')
         if test_file != 'dummy':
             self.test_file = open(test_file, 'r')
+        else:
+            self.test_file = open('dummy', 'w')
         if output_file != 'dummy':
             self.output_file = open(output_file, 'w')
+        else:
+            self.output_file = open('dummy', 'w')
 
     def get_next_point(self, sentence, filetype):
         if filetype == 'test':
@@ -58,7 +64,7 @@ class CoNLL2k3Loader(Loader):
         for item in iterator:
             yield item
 
-            # get the tokens as windows
+    # get the tokens as windows
     def get_window_tokens(self, point):
         tokens = []
         self.get_tokens(point, tokens)
@@ -71,10 +77,34 @@ class CoNLL2k3Loader(Loader):
             item = next
         yield (prev,item,('<STOP>', '<STOP>', '<STOP>', '<STOP>'))
 
-    # method to write the output
+    # method to write a prediction output
     def write_output(self, output, sentence):
         pairs = zip(output, sentence)
         for op, token in pairs:
             self.output_file.write(token + ' ' + op + '\n')
         self.output_file.write('\n')
         self.output_file.flush()
+
+    def write_output_tokens(self, output, sentence_tokens):
+        lines = zip(sentence_tokens, output)
+        for tokens, output in lines:
+            for token in tokens:
+                self.output_file.write(token)
+            self.output_file.write('\t' + output + '\n')
+        self.output_file.write('\n')
+
+    def write_line_tokens(self, line_tokens):
+        for token in line_tokens:
+            self.output_file.write(token + ' ')
+        self.output_file.write('\n\n')
+        self.output_file.flush()
+
+    # method to write a line
+    def write_line(self, line):
+        self.output_file.write(line + '\n')
+        self.output_file.flush()
+
+    def close_files(self):
+        self.train_file.close()
+        self.test_file.close()
+        self.output_file.close()
