@@ -299,6 +299,7 @@ for e in xrange(s['nepochs']):
         s['vf1'], s['vp'], s['vr'] = f1score, precision, recall
         s['tf1'], s['tp'], s['tr'] = f1score, precision,  recall
         s['be'] = e
+        s['acc'] = accuracy
     else:
         print ''
 
@@ -310,7 +311,9 @@ print 'BEST RESULT: epoch', e, 'valid F1', s['vf1'], 'best test F1', s['tf1'], '
 
 # log the training curve info
 training_curve = open('training_loss' + '-' + args.expname, 'w')
-training_curve.write(str(training_loss))
+training_curve.write(str(training_loss) + '\n')
+training_curve.write('f1: ' + str(s['tf1']) + ',accuracy: ' + str(s['acc']) + ', precision: ' +
+                     str(s['tp']) + ', recall: ' + str(s['tr']))
 training_curve.close()
 
 # best model parameters have been saved, update the model with these and save these to a folder
