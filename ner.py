@@ -14,6 +14,7 @@ from collections import OrderedDict, Counter
 
 from rnn import model_rnn
 from birnn import model_birnn_unstructured, model_birnn_structured
+from lstm import model_lstm
 from tools import shuffle, minibatch, contextwin
 
 def generate_data(datatype, word_indexes, class_indexes):
@@ -36,8 +37,8 @@ def generate_data(datatype, word_indexes, class_indexes):
     sentence_num = 0
     while len(sentence) != 0:
         sentence_num = sentence_num + 1
-        #if sentence_num > 5:
-        #    break
+        if sentence_num > 5:
+            break
         window_tokens = loader.get_unwindow_tokens(sentence)
         token_nbr = 0
         input_sequence_words = []
@@ -148,12 +149,19 @@ rnn = model( nh = s['nhidden'],
             de = s['emb_dimension'],
             cs = s['win'] )
 '''
+'''
 birnn = model_birnn_structured( nh = s['nhidden'],
             nc = num_classes,
             ne = num_embeddings,
             de = s['emb_dimension'],
             cs = s['win'],
             decode='greedy')
+'''
+lstm  = model_lstm( nh = s['nhidden'],
+            nc = num_classes,
+            ne = num_embeddings,
+            de = s['emb_dimension'],
+            cs = s['win'] )
 best_params = {}
 
 # train with early stopping on validation set
@@ -173,10 +181,12 @@ for e in xrange(s['nepochs']):
         #             minibatch(sentence, s['bs']))        # batch them up, why ??
         labels = Y_train_idxs[i]
         #for word_batch , label_last_word in zip(words, labels):
-        #rnn.sentence_train(sentence, labels, s['clr'])
+        #rnn.sentence_train(sentence_forward, labels, s['clr'])
         #rnn.normalize()
-        birnn.sentence_train(sentence_forward, sentence_backward, labels, s['clr'])
-        birnn.normalize()
+        #birnn.sentence_train(sentence_forward, sentence_backward, labels, s['clr'])
+        #birnn.normalize()
+        lstm.sentence_train(sentence_forward, labels, s['clr'])
+        lstm.normalize()
         if s['verbose']:
             print '[learning] epoch %i >> %2.2f%%'%(e,(i+1)*100./num_train_sentences),'completed in %.2f (sec) <<\r'%(time.time()-tic),
             sys.stdout.flush()
@@ -191,7 +201,8 @@ for e in xrange(s['nepochs']):
         sentence_forward = contextwin(X_test_idxs[i], s['win'])
         sentence_backward = list(reversed(sentence_forward))
         ground_truth_labels = numpy.asarray(Y_test_idxs[i])
-        predicted_labels = birnn.sentence_classify(sentence_forward, sentence_backward)
+        #predicted_labels = birnn.sentence_classify(sentence_forward, sentence_backward)
+        predicted_labels = lstm.sentence_classify(sentence_forward)
         #print ground_truth_labels
         #print predicted_labels
         total_tags += len(ground_truth_labels)
@@ -208,7 +219,7 @@ for e in xrange(s['nepochs']):
     f1score = float(2.0 * precision * recall) / float(precision + recall) if precision + recall > 0 else 0.0
     print 'epoch %d: accuracy=%.4f, precision= %.4f, recall=%.4f, f1= %.4f' % (e, accuracy, precision, recall, f1score)
     if f1score > best_f1:
-        for param, name in zip(birnn.params, birnn.names):
+        for param, name in zip(lstm.params, lstm.names):
             best_params[name] = param
         best_f1 = f1score
         if s['verbose']:
@@ -229,8 +240,8 @@ for e in xrange(s['nepochs']):
 print 'BEST RESULT: epoch', e, 'valid F1', s['vf1'], 'best test F1', s['tf1'], 'with the model', folder
 
 # best model parameters have been saved, update the model with these and save these to a folder
-birnn.update_params(best_params)
-birnn.save(folder)
+lstm.update_params(best_params)
+lstm.save(folder)
 #loader.close_files()
 
 # write the predictions to file
@@ -271,7 +282,8 @@ while len(sentence) != 0:
         test_sentence_forward = contextwin(idxs, s['win'])
         test_sentence_backward = list(reversed(test_sentence_forward))
         #print len(test_sentence_forward), len(test_sentence_backward)
-        test_labels = birnn.sentence_classify(test_sentence_forward, test_sentence_backward)
+        #test_labels = birnn.sentence_classify(test_sentence_forward, test_sentence_backward)
+        test_labels = lstm.sentence_classify(test_sentence_forward)
         test_tokens = [classes_list[label] for label in test_labels]
         prediction_loader.write_output_tokens(test_tokens, sentence)
     else:
