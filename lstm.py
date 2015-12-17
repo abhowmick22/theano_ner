@@ -19,13 +19,14 @@ from theano import tensor as T
 from theano import shared, function, scan, printing
 
 class model_lstm(object):
-    def __init__(self, nh, nc, ne, de, cs):
+    def __init__(self, nh, nc, ne, de, cs, mp):
 
         # nh :: dimension of the hidden layer
         # nc :: number of classes
         # ne :: number of word embeddings in the vocabulary
         # de :: dimension of the word embeddings
         # cs :: word window context size
+        # mp :: margin penalty, for the soft-max margin
 
         # parameters of the model
         self.emb = shared(0.2 * numpy.random.uniform(-1.0, 1.0, \
@@ -69,6 +70,8 @@ class model_lstm(object):
         # Initial state of the trained LSTM - state and representation sequence of the memory cell
         self.C0  = shared(numpy.zeros(nh, dtype=theano.config.floatX))
         self.h0  = shared(numpy.zeros(nh, dtype=theano.config.floatX))
+        # not a param
+        self.sm_bias = shared(numpy.array([1.0] * (nc-2) + [1.0 / mp] + [1.0], dtype=theano.config.floatX ))
 
         # bundle
         self.params = [ self.emb, self.Wi, self.Wf, self.Wc, self.Wo, self.Ui, self.Uf, self.Uc, self.Uo,
@@ -88,7 +91,7 @@ class model_lstm(object):
             o_t = T.nnet.sigmoid(T.dot(x_t, self.Wo) + T.dot(h_tm1, self.Uo) +              # the output gate
                                  T.dot(C_t, self.Vo) + self.bo)
             h_t = o_t * T.tanh(C_t)                                                         # the cell output
-            r_t = T.nnet.softmax(T.dot(h_t, self.Wout) + self.c)                            # the soft-max output
+            r_t = T.nnet.softmax(T.dot(h_t, self.Wout) + self.c) * self.sm_bias             # the soft-max output
             return [C_t, h_t, r_t]
 
         [C, h, r], _ = theano.scan(fn=recurrence, \

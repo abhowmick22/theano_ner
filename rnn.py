@@ -62,7 +62,6 @@ class model_rnn(object):
         pos = self.pos_emb[pos_idxs].reshape((pos_idxs.shape[0], dp*cs))
         chunks = self.chunk_emb[chunk_idxs].reshape((chunk_idxs.shape[0], dch*cs))
         y_sentence = T.ivector('y_sentence') # label
-        #softmax_margin = tools.SoftmaxMargin()
 
         def recurrence(x_t, p_t, ch_t, s_tm1):
             s_t = T.nnet.sigmoid(T.dot(x_t, self.Wx) + T.dot(p_t, self.Wpos) +
