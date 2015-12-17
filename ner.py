@@ -193,7 +193,7 @@ s = {'fold':5, # 5 folds 0,1,2,3,4
      'emb_dimension':100, # dimension of word embedding
      'pos_emb_dimension':5, # dimension of pos embedding
      'chunk_emb_dimension':5, # dimension of chunk embedding
-     'nepochs':2}
+     'nepochs':20}
 
 folder = os.path.basename(__file__).split('.')[0] + '-' + args.expname
 if not os.path.exists(folder): os.mkdir(folder)
