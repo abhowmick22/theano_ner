@@ -13,9 +13,10 @@ from collections import OrderedDict
 import numpy, theano
 from theano import tensor as T
 from theano import shared, function, scan
+import tools
 
 class model_rnn(object):
-    def __init__(self, nh, nc, ne, np, nch, de, dp, dch, cs):
+    def __init__(self, nh, nc, ne, np, nch, de, dp, dch, cs, mp):
 
         # nh :: dimension of the hidden layer
         # nc :: number of classes
@@ -26,6 +27,7 @@ class model_rnn(object):
         # dp :: dimension of the pos tag embeddings
         # dch:: dimension of the chunk embeddings
         # cs :: word window context size
+        # mp :: margin penalty, for the soft-max margin
 
         # parameters of the model, add one for PADDING at the end (corresponds to -1)
         self.emb = shared(0.2 * numpy.random.uniform(-1.0, 1.0, \
@@ -42,11 +44,13 @@ class model_rnn(object):
                    (dch * cs, nh)).astype(theano.config.floatX))
         self.Wh  = shared(0.2 * numpy.random.uniform(-1.0, 1.0,\
                    (nh, nh)).astype(theano.config.floatX))
-        self.Wout   = theano.shared(0.2 * numpy.random.uniform(-1.0, 1.0,\
+        self.Wout   = shared(0.2 * numpy.random.uniform(-1.0, 1.0,\
                    (nh, nc)).astype(theano.config.floatX))
         self.bs  = shared(numpy.zeros(nh, dtype=theano.config.floatX))
         self.c   = shared(numpy.zeros(nc, dtype=theano.config.floatX))
         self.s0  = shared(numpy.zeros(nh, dtype=theano.config.floatX))
+        # not a param
+        self.sm_bias = shared(numpy.array([1.0] * (nc-2) + [1.0 / mp] + [1.0], dtype=theano.config.floatX ))
 
         # bundle
         self.params = [ self.emb, self.pos_emb, self.chunk_emb, self.Wx, self.Wpos, self.Wchunk, self.Wh, self.Wout, self.bs, self.c, self.s0 ]
@@ -58,11 +62,13 @@ class model_rnn(object):
         pos = self.pos_emb[pos_idxs].reshape((pos_idxs.shape[0], dp*cs))
         chunks = self.chunk_emb[chunk_idxs].reshape((chunk_idxs.shape[0], dch*cs))
         y_sentence = T.ivector('y_sentence') # label
+        #softmax_margin = tools.SoftmaxMargin()
 
         def recurrence(x_t, p_t, ch_t, s_tm1):
             s_t = T.nnet.sigmoid(T.dot(x_t, self.Wx) + T.dot(p_t, self.Wpos) +
                                  T.dot(ch_t, self.Wchunk) + T.dot(s_tm1, self.Wh) + self.bs)
-            r_t = T.nnet.softmax(T.dot(s_t, self.Wout) + self.c)
+            r_t = T.nnet.softmax(T.dot(s_t, self.Wout) + self.c) * self.sm_bias
+            #r_t = softmax_with_bias(T.dot(s_t, self.Wout) + self.c, self.sm_bias)
             return [s_t, r_t]
 
         [s, r], _ = theano.scan(fn=recurrence, \
@@ -77,6 +83,7 @@ class model_rnn(object):
 
         # cost and gradients and learning rate
         lr = T.scalar('lr')
+        # this is the loss
         sentence_nll = -T.sum(T.log(p_y_given_x_sentence)
                                [T.arange(x.shape[0]), y_sentence])     # assignment instructs to use sum and not mean
         sentence_gradients = T.grad( sentence_nll, self.params )
