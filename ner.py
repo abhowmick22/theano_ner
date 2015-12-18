@@ -43,8 +43,8 @@ def generate_data(datatype, word_indexes, pos_indexes, chunk_indexes, class_inde
     sentence_num = 0
     while len(sentence) != 0:
         sentence_num = sentence_num + 1
-        if sentence_num > 100:
-            break
+        #if sentence_num > 100:
+        #    break
         window_tokens = loader.get_unwindow_tokens(sentence)
         #token_nbr = 0
         input_sequence_words = []
