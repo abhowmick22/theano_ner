@@ -18,19 +18,31 @@ from theano import tensor as T
 from theano import shared, function, scan, printing
 
 class model_birnn_unstructured(object):
-    def __init__(self, nh, nc, ne, de, cs):
+    def __init__(self, nh, nc, ne, np, nch, de, dp, dch, cs):
 
         # nh :: dimension of the hidden layer
         # nc :: number of classes
         # ne :: number of word embeddings in the vocabulary
+        # np :: number of pos tags in the vocabulary
+        # nch:: number of chunk tags in the vocabulary
         # de :: dimension of the word embeddings
+        # dp :: dimension of the pos tag embeddings
+        # dch:: dimension of the chunk embeddings
         # cs :: word window context size
 
         # parameters of the model
         self.emb = shared(0.2 * numpy.random.uniform(-1.0, 1.0, \
                    (ne+1, de)).astype(theano.config.floatX)) # add one for PADDING at the end (corresponds to -1)
+        self.pos_emb = shared(0.2 * numpy.random.uniform(-1.0, 1.0, \
+                   (np+1, dp)).astype(theano.config.floatX))
+        self.chunk_emb = shared(0.2 * numpy.random.uniform(-1.0, 1.0, \
+                   (nch+1, dch)).astype(theano.config.floatX))
         self.Wx  = shared(0.2 * numpy.random.uniform(-1.0, 1.0,\
                    (de * cs, nh)).astype(theano.config.floatX))
+        self.Wpos    = shared(0.2 * numpy.random.uniform(-1.0, 1.0,\
+                   (dp * cs, nh)).astype(theano.config.floatX))
+        self.Wchunk  = shared(0.2 * numpy.random.uniform(-1.0, 1.0,\
+                   (dch * cs, nh)).astype(theano.config.floatX))
         self.Wh_forward  = shared(0.2 * numpy.random.uniform(-1.0, 1.0,\
                             (nh, nh)).astype(theano.config.floatX))
         self.Wh_backward  = shared(0.2 * numpy.random.uniform(-1.0, 1.0,\
@@ -49,27 +61,37 @@ class model_birnn_unstructured(object):
         self.s0_backward  = shared(numpy.zeros(nh, dtype=theano.config.floatX))
 
         # bundle
-        self.params = [ self.emb, self.Wx, self.Wh_forward, self.Wh_backward, self.Wc_forward, self.Wc_backward,
+        self.params = [ self.emb, self.pos_emb, self.chunk_emb, self.Wx, self.Wpos, self.Wchunk, self.Wh_forward, self.Wh_backward, self.Wc_forward, self.Wc_backward,
                         self.Wout, self.bs_forward, self.bs_backward, self.bc, self.c, self.s0_forward, self.s0_backward]
-        self.names  = ['embeddings', 'Wx', 'Wh_forward', 'Wh_backward', 'Wc_forward', 'Wc_backward',
+        self.names  = ['embeddings', 'pos_embeddings', 'chunk_embeddings', 'Wpos', 'Wchunk', 'Wx', 'Wh_forward', 'Wh_backward', 'Wc_forward', 'Wc_backward',
                        'Wout', 'bs_forward', 'bs_backward', 'bc', 'c', 's0_forward', 's0_backward' ]
         idxs_forward = T.imatrix() # as many columns as context window size/ lines as words in the sentence
+        pos_idxs_forward = T.imatrix()
+        chunk_idxs_forward = T.imatrix()
         idxs_backward = T.imatrix() # as many columns as context window size/ lines as words in the sentence
+        pos_idxs_backward = T.imatrix()
+        chunk_idxs_backward = T.imatrix()
         x_forward = self.emb[idxs_forward].reshape((idxs_forward.shape[0], de*cs))
+        pos_forward = self.pos_emb[pos_idxs_forward].reshape((pos_idxs_forward.shape[0], dp*cs))
+        chunks_forward = self.chunk_emb[chunk_idxs_forward].reshape((chunk_idxs_forward.shape[0], dch*cs))
         x_backward = self.emb[idxs_backward].reshape((idxs_backward.shape[0], de*cs))
+        pos_backward = self.pos_emb[pos_idxs_backward].reshape((pos_idxs_backward.shape[0], dp*cs))
+        chunks_backward = self.chunk_emb[chunk_idxs_backward].reshape((chunk_idxs_backward.shape[0], dch*cs))
         y_sentence = T.ivector('y_sentence') # label
 
-        def recurrence(x_forward_t, x_backward_t, s_forward_tm1, s_backward_tm1):
-            s_forward_t = T.nnet.sigmoid(T.dot(x_forward_t, self.Wx) + T.dot(s_forward_tm1, self.Wh_forward)
+        def recurrence(x_forward_t, x_backward_t, p_forward_t, p_backward_t, ch_forward_t, ch_backward_t, s_forward_tm1, s_backward_tm1):
+            s_forward_t = T.nnet.sigmoid(T.dot(x_forward_t, self.Wx) + T.dot(p_forward_t, self.Wpos) + T.dot(ch_forward_t, self.Wchunk)
+                                        + T.dot(s_forward_tm1, self.Wh_forward)
                                         + self.bs_forward)
-            s_backward_t = T.nnet.sigmoid(T.dot(x_backward_t, self.Wx) + T.dot(s_backward_tm1, self.Wh_backward)
+            s_backward_t = T.nnet.sigmoid(T.dot(x_backward_t, self.Wx) + T.dot(p_backward_t, self.Wpos) + T.dot(ch_backward_t, self.Wchunk)
+                                        + T.dot(s_backward_tm1, self.Wh_backward)
                                         + self.bs_backward)
             s_t = T.nnet.sigmoid(T.dot(s_forward_t, self.Wc_forward) + T.dot(s_backward_t, self.Wc_backward) + self.bc)
             r_t = T.nnet.softmax(T.dot(s_t, self.Wout) + self.c)
             return [s_forward_t, s_backward_t, r_t]
 
         [s_forward, s_backward, r], _ = theano.scan(fn=recurrence, \
-                                            sequences=[x_forward, x_backward],
+                                            sequences=[x_forward, x_backward, pos_forward, pos_backward, chunks_forward, chunks_backward],
                                             outputs_info=[self.s0_forward, self.s0_backward, None], \
                                             n_steps=x_forward.shape[0])
 
@@ -89,8 +111,10 @@ class model_birnn_unstructured(object):
                                        zip( self.params , sentence_gradients))
 
         # theano functions
-        self.sentence_classify = theano.function(inputs=[idxs_forward, idxs_backward], outputs=y_pred)
-        self.sentence_train = theano.function( inputs = [idxs_forward, idxs_backward, y_sentence, lr],
+        self.sentence_classify = theano.function(inputs=[idxs_forward, idxs_backward, pos_idxs_forward, pos_idxs_backward,
+                                                         chunk_idxs_forward, chunk_idxs_backward], outputs=y_pred)
+        self.sentence_train = theano.function( inputs = [idxs_forward, idxs_backward, pos_idxs_forward, pos_idxs_backward,
+                                                         chunk_idxs_forward, chunk_idxs_backward, y_sentence, lr],
                                       outputs = sentence_nll,
                                       updates = sentence_updates )
 
@@ -100,7 +124,11 @@ class model_birnn_unstructured(object):
 
     def update_params(self, params_dict):
         self.emb = params_dict['embeddings']
+        self.pos_emb = params_dict['pos_embeddings']
+        self.chunk_emb = params_dict['chunk_embeddings']
         self.Wx = params_dict['Wx']
+        self.Wpos = params_dict['Wpos']
+        self.Wchunk = params_dict['Wchunk']
         self.Wh_forward = params_dict['Wh_forward']
         self.Wh_backward = params_dict['Wh_backward']
         self.Wc_forward = params_dict['Wc_forward']
