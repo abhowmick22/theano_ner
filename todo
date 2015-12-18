@@ -8,20 +8,27 @@ RNN -
 	context size - 1 (3), embedding = 100, 5 (4), hidden = 100
 	hidden layer dimension - 200 (5), context = 3, emb = 100
 	learning rate - 0.001 [6],  0.005 [7], hidden layer = 200
+so far all had features enabled, penalty enabled
 
-RNN with features (8), BiRNN unstructured (9), LSTM (10)
+	features disabled (8), hidden = 100
+	penalty disabled (9), hidden = 100
 
-LSTM/RNN (?) with margin penalty = 5  (11)
-LSTM/RNN (?) with margin penalty = 10 (12)
-BiRNN structured (13)
+Newer architectures
+
+features enabled, penalty disabled
+word embedding = 100, context size = 5, hidden width = 200, lr = 0.01
+
+BiRNN unstructured (10)
+BiRNN structured (11)
+LSTM (12)
 
 
 python ner.py --train train.data --val dev.data --test test_hid.data --expname 9
 
 Experiments running
 
-left		mid		right
-lr = 0.001	win = 5		lr = 0.005
+left			mid			right
+features disabled       penalty disabled	
 
 
 
